@@ -1,33 +1,22 @@
 ## app/database.py
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.declarative import declarative_base
-from contextlib import contextmanager
-from app.config import Config  # Import Config จาก utils/config.py
+from sqlalchemy.orm import sessionmaker, declarative_base
+from app.config import Config
 
+# Create SQLAlchemy Engine
+engine = create_engine(Config.FULL_DATABASE_URL, pool_pre_ping=True)
+
+# Create Session Factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base Model for SQLAlchemy (ใช้ร่วมกันกับโมเดลทั้งหมด)
 Base = declarative_base()
 
-class DbConnect:
-    """Manage database connection."""
-    def __init__(self):
-        self.engine = create_engine(Config.FULL_DATABASE_URL)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-
-    @contextmanager
-    def get_session(self):
-        """Generate a database session."""
-        session = self.SessionLocal()
-        try:
-            yield session
-        finally:
-            session.close()
-
-    def test_connection(self):
-        """Test database connection."""
-        try:
-            with self.engine.connect():
-                return "Database connection successful."
-        except SQLAlchemyError as e:
-            return f"Database connection failed: {e}"
+def get_db():
+    """Provide a database session and ensure proper cleanup."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

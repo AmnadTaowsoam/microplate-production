@@ -1,13 +1,23 @@
-## utils/config.py
-
+# utils/config.py
 from dotenv import load_dotenv
 import os
 from pathlib import Path
 
-# โหลด .env จากระดับโฟลเดอร์ที่อยู่ 2 ระดับเหนือ config.py
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env")
-print(f"Loaded .env path: {Path(__file__).resolve().parents[2] / '.env'}")
+# 1. หาโฟลเดอร์ services (สองระดับเหนือไฟล์นี้)
+base_services = Path(__file__).resolve().parents[2]
 
+# 2. โหลดค่าจาก .env.common
+common_env = base_services / ".env.common"
+if common_env.exists():
+    load_dotenv(dotenv_path=common_env)
+    print(f"Loaded common env: {common_env}")
+
+# 3. โหลดค่าจาก .env.predictor ในโฟลเดอร์ predictor-service
+predictor_env = Path(__file__).resolve().parents[1] / ".env.predictor"
+if predictor_env.exists():
+    # override ค่าเดิมถ้ามีซ้ำกัน
+    load_dotenv(dotenv_path=predictor_env, override=True)
+    print(f"Loaded predictor env: {predictor_env}")
 
 class Config:
     # Database Config
@@ -37,14 +47,8 @@ class Config:
     CONNECTION_TIMEOUT: int = int(os.getenv("CONNECTION_TIMEOUT", "10"))
     READ_TIMEOUT: int = int(os.getenv("READ_TIMEOUT", "30"))
     TOKEN_EXPIRE_MINUTES: int = int(os.getenv("TOKEN_EXPIRE_MINUTES", "30"))
-    
-    # Service URLs and Ports
-    USER_MANAGEMENT_URL: str = os.getenv("USER_MANAGEMENT_URL", "http://localhost")
-    API_GATEWAY_URL: str = os.getenv("API_GATEWAY_URL", "http://localhost")
-    PRED_URL: str = os.getenv("PRED_URL", "http://localhost")
-    INTERFACE_URL: str = os.getenv("PRED_URL", "http://localhost")
-    
-    USER_MANAGEMENT_PORT: int = int(os.getenv("USER_MANAGEMENT_PORT", 0))
-    API_GATEWAY_PORT: int = int(os.getenv("API_GATEWAY_PORT", 0))
-    PRED_PORT: int = int(os.getenv("PRED_PORT", 0))
-    INTERFACE_PORT: int = int(os.getenv("INTERFACE_PORT", 0))
+
+    MODEL_VERSION : str = os.getenv("MODEL_VERSION", "0.0")
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/tmp")
+    MODEL_PATH: str = os.getenv("MODEL_PATH", "")
+    PORT: int = int(os.getenv("PORT", "3104"))

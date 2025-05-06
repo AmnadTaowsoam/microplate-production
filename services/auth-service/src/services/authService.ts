@@ -1,4 +1,5 @@
 // services/auth-service/src/services/authService.ts
+
 import { Repository } from 'typeorm';
 import jwt, { VerifyErrors } from 'jsonwebtoken';
 import { User } from '../models/user.model';
@@ -75,7 +76,9 @@ export class AuthService {
   }
 
   private async createTokenPair(user: User): Promise<TokenPair> {
-    const payload = { sub: user.id };
+    // Ensure 'sub' is a string
+    const subject = String(user.id);
+    const payload = { sub: subject };
 
     const accessToken = jwt.sign(payload, JWT_SECRET, {
       expiresIn: `${ACCESS_TOKEN_EXPIRE_MINUTES}m`,
@@ -101,12 +104,16 @@ export class AuthService {
     return { accessToken, expiresIn, refreshToken };
   }
 
-  private generateAccessToken(userId: number): { accessToken: string; expiresIn: number } {
-    const accessToken = jwt.sign({ sub: userId }, JWT_SECRET, {
+  private generateAccessToken(userId: number): {
+    accessToken: string;
+    expiresIn: number;
+  } {
+    // Ensure 'sub' is a string
+    const payload = { sub: String(userId) };
+    const accessToken = jwt.sign(payload, JWT_SECRET, {
       expiresIn: `${ACCESS_TOKEN_EXPIRE_MINUTES}m`,
       algorithm: ALGORITHM as jwt.Algorithm,
     });
     return { accessToken, expiresIn: ACCESS_TOKEN_EXPIRE_MINUTES * 60 };
   }
 }
-

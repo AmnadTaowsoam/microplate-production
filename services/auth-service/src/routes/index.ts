@@ -1,11 +1,12 @@
 // services/auth-service/src/routes/index.ts
 import { Router } from 'express';
-import authRoutes from './authRoutes';
+import { DataSource } from 'typeorm';
+import { createAuthRouter } from './authRoutes';
 
-const router = Router();
+export function createApiRouter(dataSource: DataSource): Router {
+  const mainRouter = Router();
+  const authRouterInstance = createAuthRouter(dataSource);
+  mainRouter.use('/api/v1/auth', authRouterInstance);
 
-// Mount auth routes
-router.use('/api/v1/auth', authRoutes);
-
-export default router;
-
+  return mainRouter;
+}

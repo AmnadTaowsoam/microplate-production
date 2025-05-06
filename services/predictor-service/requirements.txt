@@ -1,0 +1,9 @@
+fastapi==0.115.12
+python-jose==3.4.0
+ultralytics==8.3.127
+opencv-python==4.11.0.86
+SQLAlchemy==2.0.40
+python-dotenv==1.1.0
+psycopg2==2.9.10
+python-multipart==0.0.20
+uvicorn==0.34.2

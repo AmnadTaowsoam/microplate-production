@@ -1,4 +1,5 @@
 "use strict";
+// services/auth-service/src/services/authService.ts
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -66,7 +67,9 @@ class AuthService {
     }
     createTokenPair(user) {
         return __awaiter(this, void 0, void 0, function* () {
-            const payload = { sub: user.id };
+            // Ensure 'sub' is a string
+            const subject = String(user.id);
+            const payload = { sub: subject };
             const accessToken = jsonwebtoken_1.default.sign(payload, config_1.JWT_SECRET, {
                 expiresIn: `${config_1.ACCESS_TOKEN_EXPIRE_MINUTES}m`,
                 algorithm: config_1.ALGORITHM,
@@ -87,7 +90,9 @@ class AuthService {
         });
     }
     generateAccessToken(userId) {
-        const accessToken = jsonwebtoken_1.default.sign({ sub: userId }, config_1.JWT_SECRET, {
+        // Ensure 'sub' is a string
+        const payload = { sub: String(userId) };
+        const accessToken = jsonwebtoken_1.default.sign(payload, config_1.JWT_SECRET, {
             expiresIn: `${config_1.ACCESS_TOKEN_EXPIRE_MINUTES}m`,
             algorithm: config_1.ALGORITHM,
         });

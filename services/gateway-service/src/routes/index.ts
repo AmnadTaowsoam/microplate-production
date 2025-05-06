@@ -1,4 +1,3 @@
-// services\api-gateway\src\routes\index.ts
 import { Router } from 'express';
 import proxyRouter from './proxy';
 // import otherRouters from './otherService';  // if needed in future

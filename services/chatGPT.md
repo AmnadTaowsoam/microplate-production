@@ -218,7 +218,9 @@ paths:
 | `/data/interface-results`      | GET    | —                                                             | `{ "items": [ { "id": "...", ... } ] }`                        |
 | `/data/interface-results/{id}` | GET    | —                                                             | `{ "id": "...", "sampleNo": "...", "interfaceResult": {...} }` |
 | `/data/interface-results/{id}` | PUT    | `{ "interfaceResult": {...} }`                                | `{ "success": true }`                                          |
-| `/data/interface-results/{id}` | DELETE | —                                                             | `{ "success": true }`    
+| `/data/interface-results/{id}` | DELETE | —                                                             | `{ "success": true }`                                          |
+| `/data/sample-summary`         | GET    | —                                                             |                                                                |
+| `/data/sample-summary/by-sample/{sample_no}`         | GET    | —                              |                                                                |
 
 ### 3.7 Labware Integration Service
 

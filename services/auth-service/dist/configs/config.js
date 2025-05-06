@@ -27,16 +27,25 @@ exports.ALGORITHM = exports.REFRESH_TOKEN_EXPIRE_DAYS = exports.ACCESS_TOKEN_EXP
 // services/auth-service/src/configs/config.ts
 const dotenv = __importStar(require("dotenv"));
 const path_1 = require("path");
-dotenv.config({ path: (0, path_1.join)(__dirname, '../../../../.env.common') });
-dotenv.config({ path: (0, path_1.join)(__dirname, '../../../.env.auth') });
+// โหลดค่าจากไฟล์ .env.common (อยู่ที่ services/.env.common)
+dotenv.config({
+    path: (0, path_1.join)(__dirname, '../../../.env.common'),
+});
+// โหลดค่าจากไฟล์ .env.auth (อยู่ที่ services/auth-service/.env.auth)
+dotenv.config({
+    path: (0, path_1.join)(__dirname, '../../.env.auth'),
+});
 exports.DB_HOST = process.env.DB_HOST;
 exports.DB_PORT = Number(process.env.DB_PORT) || 5432;
 exports.DB_NAME = process.env.DB_NAME;
 exports.DB_USER = process.env.DB_USER;
 exports.DB_PASSWORD = process.env.DB_PASSWORD;
-exports.DATABASE_URL = process.env.DATABASE_URL || `postgresql://${exports.DB_USER}:${exports.DB_PASSWORD}@${exports.DB_HOST}:${exports.DB_PORT}/${exports.DB_NAME}`;
+// ถ้ามี DATABASE_URL ใน env ให้ใช้เลย ไม่งั้นสร้างใหม่
+exports.DATABASE_URL = process.env.DATABASE_URL ||
+    `postgresql://${exports.DB_USER}:${exports.DB_PASSWORD}@${exports.DB_HOST}:${exports.DB_PORT}/${exports.DB_NAME}`;
 exports.PORT = Number(process.env.PORT) || 3101;
 exports.JWT_SECRET = process.env.JWT_SECRET_KEY;
 exports.ACCESS_TOKEN_EXPIRE_MINUTES = Number(process.env.TOKEN_EXPIRATION_MINUTES) || 1440;
 exports.REFRESH_TOKEN_EXPIRE_DAYS = Number(process.env.REFRESH_TOKEN_EXPIRE_DAYS) || 7;
+// ระบุชนิด Algorithm ให้ตรงกับ jsonwebtoken
 exports.ALGORITHM = process.env.ALGORITHM || 'HS256';

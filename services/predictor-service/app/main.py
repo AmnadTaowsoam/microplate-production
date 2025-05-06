@@ -1,30 +1,24 @@
-## app/man.py
-
-import sys
+## /app/main.py
 import os
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.utils.logger import get_logger
+import logging
 from app.config import Config
-from app.api.v1.endpoint import router as api_router
-from app.database import Base, DbConnect
+from app.api.v1.endpoints import router as api_router
 
 # Initialize FastAPI app
 app = FastAPI()
 
 # Initialize Logger
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Configure CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=Config.CORS_ALLOWED_ORIGINS,  # Parse comma-separated CORS origins
+    allow_origins=Config.CORS_ALLOWED_ORIGINS,
     allow_credentials=Config.CORS_ALLOW_CREDENTIALS,
-    allow_methods=Config.CORS_ALLOW_METHODS,  # Parse comma-separated allowed methods
-    allow_headers=Config.CORS_ALLOW_HEADERS,  # Parse comma-separated allowed headers
+    allow_methods=Config.CORS_ALLOW_METHODS,
+    allow_headers=Config.CORS_ALLOW_HEADERS,
 )
 
 # Health Check Endpoint
@@ -34,16 +28,12 @@ async def health_check():
     return {"status": "healthy"}
 
 # Route Registration
-app.include_router(api_router, prefix="/api/v1")
-
-@app.on_event("startup")
-async def create_tables():
-    db_connect = DbConnect()
-    Base.metadata.create_all(bind=db_connect.engine)
+app.include_router(api_router, prefix="/api/v1/predictor")
 
 # Main entry point for development
 if __name__ == "__main__":
     import uvicorn
-    HOST = "0.0.0.0"  # แก้ไขให้ใช้ IP แบบ Global
-    PORT = Config.USER_MANAGEMENT_PORT
+    HOST = os.getenv("HOST", "0.0.0.0")
+    PORT = Config.PORT
+    logger.info(f"Starting server at {HOST}:{PORT}")
     uvicorn.run("app.main:app", host=HOST, port=PORT, reload=True, workers=2)

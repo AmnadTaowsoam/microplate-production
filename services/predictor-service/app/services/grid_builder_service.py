@@ -8,11 +8,11 @@ from collections import defaultdict
 import pandas as pd
 import uuid
 
-from app.utils.logger import get_logger
+import logging
 from app.config import Config
 
 # ตั้งค่า logging
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings('ignore')
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'

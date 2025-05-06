@@ -5,10 +5,10 @@ from ultralytics import YOLO
 from collections import defaultdict
 import pandas as pd
 
-from app.utils.logger import get_logger
+import logging
 
 # ตั้งค่า logging
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings('ignore')
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'

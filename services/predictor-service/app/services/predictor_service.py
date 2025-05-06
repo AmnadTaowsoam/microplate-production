@@ -1,11 +1,12 @@
+## app/services/predictor_service.py
 import os
 import cv2
 import tempfile
 from ultralytics import YOLO
-from app.utils.logger import get_logger
+import logging
 
 # ตั้งค่า logging
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # กำหนดสีสำหรับแต่ละคลาส
 COLORS = {0: (255, 0, 0), 1: (0, 255, 0), 2: (0, 0, 255)}

@@ -132,7 +132,7 @@ docker-compose up --build
 |          └── tsconfig.json
 ├── cache-service(port:6379)/           # Redis (session, token cache)
 ├── frontend(port:3107)/                # Next.js + TS + MUI
-|    └── nextjs-app/
+|    └── microplate-app/
 ├── infrastructure/
 │    └── docker-compose.yml
 ├── .env.common

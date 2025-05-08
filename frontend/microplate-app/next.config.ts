@@ -22,9 +22,12 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/v1/:path*',           // ทุกคำขอที่ขึ้นต้น /api/v1/
-        destination: 'http://localhost:3100/api/v1/:path*',  
+        destination: 'http://localhost:3100/api/v1/:path*',
       },
-      // ถ้ามี endpoint อื่นที่นอก /api/v1 ให้จับเพิ่มที่นี่
+      {
+        source: '/images/:path*',
+        destination: 'http://localhost:3100/images/:path*',
+      },
     ];
   },
 };

@@ -24,31 +24,37 @@ const statusConfig: Record<CobotStatus['status'], {
   icon: React.ReactNode;
   color: string;
 }> = {
-  IDLE: { label: 'Cobot Status "Idle"', icon: <PauseCircleOutlineIcon />, color: '#4caf50' },
-  MOVING: { label: 'Cobot Status "Moving"', icon: <DirectionsRunIcon />, color: '#2196f3' },
-  PICKED: { label: 'Cobot Status "Picked"', icon: <PanToolIcon />, color: '#ff9800' },
-  SCANNING: { label: 'Cobot Status "Scanning"', icon: <CropFreeIcon />, color: '#673ab7' },
-  PLACED: { label: 'Cobot Status "Placed"', icon: <CheckCircleOutlineIcon />, color: '#009688' },
-  ERROR: { label: 'Cobot Status "Error"', icon: <ErrorOutlineIcon />, color: '#f44336' },
+  IDLE:     { label: 'Idle',    icon: <PauseCircleOutlineIcon />,   color: '#4caf50' },
+  MOVING:   { label: 'Moving',  icon: <DirectionsRunIcon />,         color: '#2196f3' },
+  PICKED:   { label: 'Picked',  icon: <PanToolIcon />,               color: '#ff9800' },
+  SCANNING: { label: 'Scanning',icon: <CropFreeIcon />,             color: '#673ab7' },
+  PLACED:   { label: 'Placed',  icon: <CheckCircleOutlineIcon />,    color: '#009688' },
+  ERROR:    { label: 'Error',   icon: <ErrorOutlineIcon />,          color: '#f44336' },
+};
+
+// ค่า mock เริ่มต้น
+const MOCK_STATUS: CobotStatus = {
+  status: 'IDLE',
+  updatedAt: new Date().toISOString(),
 };
 
 export default function CobotStatusCard() {
   const theme = useTheme();
-  const [status, setStatus] = useState<CobotStatus | null>(null);
+  const [status, setStatus]   = useState<CobotStatus>(MOCK_STATUS);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
+
     const fetchStatus = async () => {
       try {
         const res = await cobotApi.getStatus();
         if (!mounted) return;
         setStatus(res);
-        setError(null);
-      } catch (e: any) {
+      } catch (e) {
+        // เมื่อ fetch ไม่สำเร็จ ให้ใช้ค่า mock แทน ไม่แสดง error
         if (!mounted) return;
-        setError(e.message || 'Failed to fetch status');
+        setStatus({ ...MOCK_STATUS, updatedAt: new Date().toISOString() });
       } finally {
         if (!mounted) return;
         setLoading(false);
@@ -56,7 +62,7 @@ export default function CobotStatusCard() {
     };
 
     fetchStatus();
-    // Poll every 3 minutes (180,000 ms)
+    // Poll ทุกๆ 3 นาที
     const interval = setInterval(fetchStatus, 180_000);
     return () => {
       mounted = false;
@@ -69,13 +75,6 @@ export default function CobotStatusCard() {
       <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         {loading ? (
           <CircularProgress size={24} />
-        ) : error || !status ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <ErrorOutlineIcon sx={{ color: theme.palette.error.main, fontSize: 32 }} />
-            <Typography variant="body2" color="error">
-              {error || 'No data'}
-            </Typography>
-          </Box>
         ) : (
           <>
             <Avatar sx={{ bgcolor: statusConfig[status.status].color }}>
@@ -83,7 +82,7 @@ export default function CobotStatusCard() {
             </Avatar>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               <Typography variant="h6">
-                {statusConfig[status.status].label}
+                Cobot: {statusConfig[status.status].label}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Updated: {new Date(status.updatedAt).toLocaleTimeString()}

@@ -15,10 +15,16 @@ export async function fetcher<T>(url: string, options: RequestInit = {}): Promis
 
   const makeRequest = async (): Promise<Response> => {
     const token = localStorage.getItem('accessToken');
+    // start with any headers user passed in
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...((options.headers as Record<string, string>) || {}),
     };
+
+    // only set JSON content-type if the body is NOT a FormData
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
       console.log('🛡️ Attaching token to headers');

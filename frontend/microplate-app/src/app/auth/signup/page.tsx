@@ -28,7 +28,7 @@ import {
   EmailOutlined as EmailIcon,
   LockOutlined as PasswordIcon,
 } from '@mui/icons-material';
-import { authApi } from '../../api/auth';
+import { authApi } from '../../../utils/api/auth';
 
 export default function SignupPage() {
   const theme = useTheme();

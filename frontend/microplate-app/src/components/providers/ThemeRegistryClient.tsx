@@ -1,4 +1,4 @@
-// src/components/providers/ThemeRegistry.tsx
+// src/components/providers/ThemeRegistryClient.tsx
 'use client';
 
 import * as React from 'react';
@@ -9,16 +9,10 @@ import theme from '../../theme/theme';
 
 const clientSideEmotionCache = createEmotionCache();
 
-interface Props {
-  children: React.ReactNode;
-  emotionCache?: EmotionCache;
-}
-
-export default function ThemeRegistry({ children, emotionCache = clientSideEmotionCache }: Props) {
+export default function ClientProviders({ children }: { children: React.ReactNode }) {
   return (
-    <CacheProvider value={emotionCache}>
+    <CacheProvider value={clientSideEmotionCache}>
       <ThemeProvider theme={theme}>
-        {/* CssBaseline ต้องอยู่ใน client */}
         <CssBaseline />
         {children}
       </ThemeProvider>

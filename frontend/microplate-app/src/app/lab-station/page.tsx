@@ -1,7 +1,7 @@
 // src/app/lab-station/page.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Container,
@@ -15,35 +15,97 @@ import {
   Divider,
   Stack,
   IconButton,
+  CardMedia,
 } from '@mui/material';
 import ScienceIcon from '@mui/icons-material/Science';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
-import QrCode2Icon from '@mui/icons-material/QrCode2';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
+import OnlinePredictionIcon from '@mui/icons-material/OnlinePrediction';
 
 import CobotStatusCard from './cobot-status/CobotStatusCard';
 import CameraStatusCard from './camera-status/CameraStatusCard';
 import QrResultDisplay from './qr-display/QrResultDisplay';
 import PredictResultsPanel from './predict-results/PredictResultsPanel';
+import { startAutoProcess, stopAutoProcess } from '@/utils/autoProcess';
 
-import { cobotApi } from '../../utils/api/cobot';
 import { cameraApi } from '../../utils/api/camera';
 import { predictorApi } from '../../utils/api/predictor';
+import { fetcher } from '../../utils/fetcher';
+
+interface ImageRecord {
+  id: number;
+  run_id: number;
+  sample_no: string;
+  file_type: string;
+  path: string;
+  created_at: string;
+}
+
+interface PredictResponse {
+  run_id: number;
+  counts: Record<string, number[]>;
+  last_positions: Record<string, number>;
+  distribution: Record<string, number>;
+  annotated_image: string;
+}
 
 export default function LabStationPage() {
   const theme = useTheme();
 
-  const [capturedImageUrl, setCapturedImageUrl] = React.useState<string | null>(null);
-  const [qrCode, setQrCode] = React.useState<string>('No QR data yet');
-  const [predictionResults, setPredictionResults] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState<boolean>(false);
+  const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [predictionResults, setPredictionResults] = useState<PredictResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [capturedFile, setCapturedFile] = useState<File | null>(null);
+  const [capturedPreview, setCapturedPreview] = useState<string | null>(null);
+
+  // state for auto process
+  const [autoRunning, setAutoRunning] = useState(false);
+
+  // หยุด auto process ตอน unmount เท่านั้น
+  useEffect(() => {
+    return () => {
+      stopAutoProcess();
+    };
+  }, []);
+
+  // ล้าง blob URL เก่าเมื่อ capturedPreview เปลี่ยนหรือ unmount
+  useEffect(() => {
+    return () => {
+      if (capturedPreview) {
+        URL.revokeObjectURL(capturedPreview);
+      }
+    };
+  }, [capturedPreview]);
+
+  // Auto process handler
+  const handleAutoClick = () => {
+    if (autoRunning) {
+      stopAutoProcess();
+      setAutoRunning(false);
+    } else {
+      startAutoProcess(
+        (code) => {
+          setQrCode(code);
+        },
+        (pred) => {
+          setPredictionResults(pred);
+        }
+      );
+      setAutoRunning(true);
+    }
+  };
 
   const handleCapture = async () => {
     setLoading(true);
     try {
+      // cameraApi.capture() คืน full URL มาให้แล้ว
       const { imageUrl } = await cameraApi.capture();
       setCapturedImageUrl(imageUrl);
+      setCapturedPreview(imageUrl);
+      setCapturedFile(null);
+      setPredictionResults(null);
     } catch (e) {
       console.error(e);
     } finally {
@@ -54,30 +116,54 @@ export default function LabStationPage() {
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setCapturedImageUrl(reader.result as string);
-    reader.readAsDataURL(file);
+
+    setCapturedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setCapturedPreview(objectUrl);
+    setPredictionResults(null);
   };
 
+  function dataURLtoFile(dataurl: string, filename: string): File {
+    const arr = dataurl.split(',');
+    const mime = arr[0].match(/:(.*?);/)![1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8 = new Uint8Array(n);
+    while (n--) u8[n] = bstr.charCodeAt(n);
+    return new File([u8], filename, { type: mime });
+  }
+
   const handlePredict = async () => {
-    if (!capturedImageUrl) return;
+    if (!qrCode) {
+      alert('กรุณาสแกน QR Code ก่อนทำการ Predict');
+      return;
+    }
+    if (!capturedFile && !capturedPreview) {
+      alert('กรุณาถ่ายภาพหรืออัปโหลดภาพก่อนทำการ Predict');
+      return;
+    }
+
     setLoading(true);
     try {
-      const base64 = capturedImageUrl.split(',')[1];
-      const { qrData } = await cameraApi.scanQr(base64);
-      setQrCode(qrData);
-      const { results } = await predictorApi.predict({ imageUrl: capturedImageUrl, plateId: qrData });
-      setPredictionResults(results);
-    } catch (e) {
-      console.error(e);
+      let fileToSend: File;
+      if (capturedFile) {
+        fileToSend = capturedFile;
+      } else if (capturedPreview!.startsWith('data:')) {
+        fileToSend = dataURLtoFile(capturedPreview!, `${qrCode}.jpg`);
+      } else {
+        const fetchRes = await fetch(capturedPreview!);
+        const blob = await fetchRes.blob();
+        const ext = blob.type.split('/')[1] || 'jpg';
+        fileToSend = new File([blob], `${qrCode}.${ext}`, { type: blob.type });
+      }
+      const resp = await predictorApi.predict(fileToSend, qrCode!);
+      setPredictionResults(resp);
+    } catch (err) {
+      console.error('❌ Predict error:', err);
+      alert('เกิดข้อผิดพลาดขณะส่งภาพไป Predict');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRunExperiment = async () => {
-    await handleCapture();
-    await handlePredict();
   };
 
   return (
@@ -96,27 +182,28 @@ export default function LabStationPage() {
           {/* Sidebar cards (2 cols) */}
           <Grid item xs={12} md={2}>
             <Stack spacing={2}>
-              <CobotStatusCard sx={{ height: 120 }} />
-              <CameraStatusCard sx={{ height: 120 }} />
-              <QrResultDisplay value={qrCode}  />
-              <Box sx={{ minWidth: 100, width: '100%', maxWidth: 280, }}>
-                    <Button
-                      variant="contained"
-                      fullWidth
-                      startIcon={<RocketLaunchIcon />}
-                      onClick={handleRunExperiment}
-                      disabled={loading}
-                    >
-                      Start Full Experiment
-                    </Button>
-                  </Box>
+              <CobotStatusCard />
+              <CameraStatusCard />
+              <QrResultDisplay
+                onScanComplete={setQrCode}
+                externalValue={qrCode}
+              />
+              <Button
+                variant="contained"
+                fullWidth
+                startIcon={<RocketLaunchIcon />}
+                onClick={handleAutoClick}
+                color={autoRunning ? 'error' : 'primary'}
+                disabled={loading}
+              >
+                {autoRunning ? 'Stop Auto Process' : 'Start Auto Process'}
+              </Button>
             </Stack>
           </Grid>
 
           {/* Main area (10 cols) */}
           <Grid item xs={12} md={10}>
             <Grid container spacing={3}>
-              {/* Imaging & Control (8 cols) */}
               <Grid item xs={12} lg={8}>
                 <Card elevation={3} sx={{ borderRadius: 2 }}>
                   <CardHeader
@@ -128,7 +215,11 @@ export default function LabStationPage() {
                   <CardContent sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <Box
                       component="img"
-                      src={capturedImageUrl || '/placeholder.png'}
+                      src={
+                        predictionResults?.annotated_image
+                          ? `/api/images?path=${encodeURIComponent(predictionResults.annotated_image)}`
+                          : capturedPreview || '/placeholder.png'
+                      }
                       alt="Preview"
                       sx={{ width: '100%', height: 580, objectFit: 'contain', borderRadius: 1 }}
                     />
@@ -140,8 +231,8 @@ export default function LabStationPage() {
                         <AddPhotoAlternateIcon />
                         <input type="file" hidden accept="image/*" onChange={handleUpload} />
                       </IconButton>
-                      <IconButton onClick={handlePredict} color="primary" disabled={loading || !capturedImageUrl}>
-                        <QrCode2Icon />
+                      <IconButton onClick={handlePredict} color="primary" disabled={loading}>
+                        <OnlinePredictionIcon />
                       </IconButton>
                     </Stack>
                   </CardContent>
@@ -158,8 +249,8 @@ export default function LabStationPage() {
                   />
                   <Divider />
                   <CardContent sx={{ minHeight: 600 }}>
-                    {predictionResults.length ? (
-                      <PredictResultsPanel results={predictionResults} />
+                    {predictionResults ? (
+                      <PredictResultsPanel results={predictionResults} isLoading={loading} />
                     ) : (
                       <Box sx={{ textAlign: 'center', mt: 4 }}>
                         <Typography color="text.secondary">No results yet</Typography>

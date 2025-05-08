@@ -63,7 +63,7 @@ export default function CobotStatusCard() {
 
     fetchStatus();
     // Poll ทุกๆ 3 นาที
-    const interval = setInterval(fetchStatus, 180_000);
+    const interval = setInterval(fetchStatus, 360_000);
     return () => {
       mounted = false;
       clearInterval(interval);

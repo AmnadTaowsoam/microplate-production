@@ -86,16 +86,22 @@ export default function LabStationPage() {
       setAutoRunning(false);
     } else {
       startAutoProcess(
-        (code) => {
-          setQrCode(code);
+        // 1. QR scanned → set state
+        (code) => setQrCode(code),
+        // 2. Image captured → set preview state
+        (url) => {
+          setCapturedPreview(url);
+          // ถ้าต้องการรีเซ็ตผลเก่า:
+          setCapturedFile(null);
+          setPredictionResults(null);
         },
-        (pred) => {
-          setPredictionResults(pred);
-        }
+        // 3. Prediction result → set state
+        (pred) => setPredictionResults(pred)
       );
       setAutoRunning(true);
     }
   };
+
 
   const handleCapture = async () => {
     setLoading(true);
@@ -215,8 +221,7 @@ export default function LabStationPage() {
                   <CardContent sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <Box
                       component="img"
-                      src={
-                        predictionResults?.annotated_image
+                      src={predictionResults?.annotated_image
                           ? `/api/images?path=${encodeURIComponent(predictionResults.annotated_image)}`
                           : capturedPreview || '/placeholder.png'
                       }

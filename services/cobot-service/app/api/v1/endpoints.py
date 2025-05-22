@@ -1,80 +1,109 @@
 # app/api/v1/endpoints.py
+import logging
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi.concurrency import run_in_threadpool
+from jose import jwt, JWTError
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Literal
-from datetime import datetime
-from app.services.dobot_service import CobotService
 from app.config import Config
+from app.services.dobot import DobotMG400
+from app.models.schemas import MoveRequest, GripRequest, RobotStatus
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-router = APIRouter(tags=["cobot"])
+logger = logging.getLogger("cobot-service.api")
 
-# กำหนด Enum ของสถานะ
-StatusEnum = Literal["IDLE", "MOVING", "PICKED", "SCANNING", "PLACED", "ERROR"]
+# JWT bearer
+gbearer = HTTPBearer()
 
-class StatusResponse(BaseModel):
-    status: StatusEnum
-    updatedAt: datetime
-
-class MovePayload(BaseModel):
-    x: float
-    y: float
-    z: float
-
-@router.get("/status",response_model=StatusResponse,summary="Get current Cobot status")
-async def get_status():
-    """
-    Returns the current status of the Dobot MG400 cobot.
-    """
-    svc = CobotService(Config.DOBOT_PORT, Config.DOBOT_BAUDRATE)
-    return svc.get_status()
-
-@router.post("/move",response_model=StatusResponse,summary="Move cobot to specified coordinates")
-async def move_cobot(payload: MovePayload):
-    """
-    Move the Cobot to the given x, y, z coordinates.
-    """
-    svc = CobotService(Config.DOBOT_PORT, Config.DOBOT_BAUDRATE)
+def verify_token(creds: HTTPAuthorizationCredentials = Depends(gbearer)):
+    token = creds.credentials
     try:
-        svc.move_to(payload.x, payload.y, payload.z)
-        return svc.get_status()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        jwt.decode(
+            token,
+            Config.JWT_SECRET_KEY,
+            algorithms=[Config.ALGORITHM],
+            options={"verify_aud": False}
+        )
+    except JWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+    return True
 
-@router.post("/pick",response_model=StatusResponse,summary="Pick an item at specified coordinates")
-async def pick_cobot(payload: MovePayload):
-    """
-    Command the Cobot to pick up an item at x, y, z.
-    """
-    svc = CobotService(Config.DOBOT_PORT, Config.DOBOT_BAUDRATE)
+router = APIRouter(
+    prefix="/cobot",
+    dependencies=[Depends(verify_token)],
+    tags=["cobot"]
+)
+
+
+def get_robot(request: Request):
+    """Retrieve the Dobot client and points from app.state via Request"""
+    return request.app.state.robot, request.app.state.points
+
+# ——— Basic control endpoints ——————————————————————————————
+
+@router.post("/reset", response_model=RobotStatus, summary="Reset & clear errors")
+async def endpoint_reset(robot_data=Depends(get_robot)):
+    robot, _ = robot_data
     try:
-        svc.pick(payload.x, payload.y, payload.z)
-        return svc.get_status()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        resp1 = await run_in_threadpool(robot.reset)
+        resp2 = await run_in_threadpool(robot.clear_error)
+        resp3 = await run_in_threadpool(robot.continue_)
+        mode  = await run_in_threadpool(robot.robot_mode)
+        return RobotStatus(mode=mode, last_response=resp1 + resp2 + resp3)
+    except TimeoutError as e:
+        raise HTTPException(status_code=504, detail=f"Timeout: {e}")
 
-@router.post("/place",response_model=StatusResponse,summary="Place an item at specified coordinates")
-async def place_cobot(payload: MovePayload):
-    """
-    Command the Cobot to place the picked item at x, y, z.
-    """
-    svc = CobotService(Config.DOBOT_PORT, Config.DOBOT_BAUDRATE)
+@router.post("/enable", response_model=RobotStatus, summary="Enable robot motors")
+async def endpoint_enable(robot_data=Depends(get_robot)):
+    robot, _ = robot_data
     try:
-        svc.place(payload.x, payload.y, payload.z)
-        return svc.get_status()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        resp = await run_in_threadpool(robot.enable)
+        mode = await run_in_threadpool(robot.robot_mode)
+        return RobotStatus(mode=mode, last_response=resp)
+    except TimeoutError as e:
+        raise HTTPException(status_code=504, detail=f"Timeout: {e}")
 
-@router.post("/scan",response_model=StatusResponse,summary="Trigger scanning phase")
-async def scan_cobot():
-    """
-    Command the Cobot to perform a scanning operation.
-    """
-    svc = CobotService(Config.DOBOT_PORT, Config.DOBOT_BAUDRATE)
-    try:
-        # ถ้าต้องการให้ CobotService มี method scan() ก็เพิ่มใน service
-        svc.scan()
-        return svc.get_status()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/disable", response_model=RobotStatus, summary="Disable robot motors")
+async def endpoint_disable(robot_data=Depends(get_robot)):
+    robot, _ = robot_data
+    resp = await run_in_threadpool(robot.disable)
+    return RobotStatus(mode=-1, last_response=resp)
 
+# ——— Motion & Grip ——————————————————————————————
+
+@router.post("/move", response_model=RobotStatus)
+async def move_point(req: MoveRequest, robot_data=Depends(get_robot)):
+    robot, pts = robot_data
+    if req.point not in pts:
+        raise HTTPException(404, "Point not found")
+    x,y,z,r = pts[req.point]
+    # แค่ยิง MovJ ตรงๆ (ไม่ reset/enable ซ้ำ)
+    cmd = await run_in_threadpool(robot.movj, x, y, z, r,
+                                  speedj=req.speedj, accj=req.accj)
+    mode = await run_in_threadpool(robot.robot_mode)
+    return RobotStatus(mode=mode, last_response=cmd)
+
+@router.post("/grip", response_model=RobotStatus)
+async def grip(req: GripRequest, robot_data=Depends(get_robot)):
+    robot, _ = robot_data
+    # แค่สั่ง DO ปิดหรือเปิดกริปเปอร์
+    fn   = robot.close_grip if req.action=='close' else robot.release
+    resp = await run_in_threadpool(fn)
+    mode = await run_in_threadpool(robot.robot_mode)
+    return RobotStatus(mode=mode, last_response=resp)
+
+# ——— I/O & Status ——————————————————————————————
+
+@router.get("/di/{index}", response_model=RobotStatus, summary="Read digital input")
+async def read_di(
+    index: int = Path(..., ge=0, le=7),
+    robot_data=Depends(get_robot)
+):
+    robot, _ = robot_data
+    val = await run_in_threadpool(robot.di_execute, index)
+    return RobotStatus(mode=val, last_response=f"DI[{index}]={val};")
+
+@router.get("/status", response_model=RobotStatus, summary="Get current robot mode")
+async def status(robot_data=Depends(get_robot)):
+    robot, _ = robot_data
+    mode = await run_in_threadpool(robot.robot_mode)
+    return RobotStatus(mode=mode, last_response="OK")

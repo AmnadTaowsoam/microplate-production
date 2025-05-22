@@ -1,49 +1,53 @@
-## app/config.py
+## app.config.py
 from dotenv import load_dotenv
 import os
 from pathlib import Path
 
-# 1. หาโฟลเดอร์ services (สองระดับเหนือไฟล์นี้)
-base_services = Path(__file__).resolve().parents[2]
+# หาโฟลเดอร์โปรเจกต์ (สองระดับเหนือไฟล์นี้)
+base_dir = Path(__file__).resolve().parents[3]
 
-# 2. โหลดค่าจาก .env.common
-common_env = base_services / ".env.common"
+# โหลดค่าจาก .env.common (ถ้ามี)
+common_env = base_dir / ".env.comon"
 if common_env.exists():
-    load_dotenv(dotenv_path=common_env)
+    load_dotenv(dotenv_path=str(common_env))
     print(f"Loaded common env: {common_env}")
 
-# 3. โหลดค่าจาก .env.cobot ในโฟลเดอร์ cobot-service
-predictor_env = Path(__file__).resolve().parents[1] / ".env.cobot"
-if predictor_env.exists():
-    # override ค่าเดิมถ้ามีซ้ำกัน
-    load_dotenv(dotenv_path=predictor_env, override=True)
-    print(f"Loaded cobot env: {predictor_env}")
+# โหลดค่าจาก .env.cobot ในโฟลเดอร์ cobot-service (ถ้ามี)
+cobot_env = Path(__file__).resolve().parents[1] / ".env.cobot"
+if cobot_env.exists():
+    load_dotenv(dotenv_path=str(cobot_env), override=True)
+    print(f"Loaded cobot env: {cobot_env}")
 
 class Config:
-    # CORS Settings
-    CORS_ALLOWED_ORIGINS: list = os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
-    CORS_ALLOW_CREDENTIALS: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
-    CORS_ALLOW_METHODS: list = os.getenv("CORS_ALLOW_METHODS", "GET,POST,PUT,DELETE").split(",")
-    CORS_ALLOW_HEADERS: list = os.getenv("CORS_ALLOW_HEADERS", "Authorization,Content-Type,Accept").split(",")
+    # CORS (ตัวอย่าง)
+    CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
+    CORS_ALLOW_CREDENTIALS = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
+    CORS_ALLOW_METHODS = os.getenv("CORS_ALLOW_METHODS", "*").split(",")
+    CORS_ALLOW_HEADERS = os.getenv("CORS_ALLOW_HEADERS", "*").split(",")
 
-    # API Key and Secrets
-    API_KEY: str = os.getenv("API_KEY", "")
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
-    ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
+    # JWT / Auth
+    API_KEY         = os.getenv("API_KEY", "")
+    JWT_SECRET_KEY  = os.getenv("JWT_SECRET_KEY", "")
+    ALGORITHM       = os.getenv("ALGORITHM", "HS256")
+    TOKEN_EXPIRE_M  = int(os.getenv("TOKEN_EXPIRATION_MINUTES", "1440"))
 
-    # Token Expiration
-    TOKEN_EXPIRATION_MINUTES: int = int(os.getenv("TOKEN_EXPIRATION_MINUTES", os.getenv("TOKEN_EXPIRE_MINUTES", "1440")))
+    # Logging / Timeouts
+    LOG_LEVEL           = os.getenv("LOG_LEVEL", "INFO")
+    CONNECTION_TIMEOUT  = int(os.getenv("CONNECTION_TIMEOUT", "10"))
+    READ_TIMEOUT        = int(os.getenv("READ_TIMEOUT", "30"))
 
-    # Logging and Timeouts (อ้างอิงจาก .env.common)
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    CONNECTION_TIMEOUT: int = int(os.getenv("CONNECTION_TIMEOUT", "10"))
-    READ_TIMEOUT: int = int(os.getenv("READ_TIMEOUT", "30"))
+    # **Cobot settings** – อ่าน env แล้วแปลงให้เป็นชนิดที่ถูกต้อง
+    ROBOT_IP       = os.getenv("ROBOT_IP", "192.168.1.6")
+    DASH_PORT      = int(os.getenv("DASH_PORT", "29999"))
+    MOTION_PORT    = int(os.getenv("MOTION_PORT", "30003"))
+    ROBOT_TIMEOUT  = float(os.getenv("TIMEOUT", "60.0"))
+    POINT_JSON_PATH = os.getenv("POINT_JSON_PATH", "./app/point.json")
 
-    # Cobot Service Specific
-    DOBOT_PORT: str = os.getenv("DOBOT_PORT", "/dev/ttyUSB0")
-    DOBOT_BAUDRATE: int = int(os.getenv("DOBOT_BAUDRATE", "115200"))
-    PORT: int = int(os.getenv("PORT", "3102"))
+    # Simulation mode
+    SIMULATION = os.getenv("SIMULATION", "false").lower() == "true"
 
-    SIMULATION: bool = os.getenv("SIMULATION", "false").lower() == "true"
-    print(f"SIMULATION MODE: {SIMULATION}")
+    # FastAPI
+    HOST = os.getenv("HOST", "0.0.0.0")
+    PORT = int(os.getenv("PORT", "3102"))
+
+    print(f"Loaded Cobot config → IP={ROBOT_IP}  DASH={DASH_PORT}  MOTION={MOTION_PORT}  SIM={SIMULATION}")

@@ -1,114 +1,196 @@
 // src/utils/autoProcess.ts
-import { cobotApi, CobotStatus } from '@/utils/api/cobot';
+import { cobotApi } from '@/utils/api/cobot';
 import { cameraApi, ScanQrResponse } from '@/utils/api/camera';
 import { predictorApi } from '@/utils/api/predictor';
 
 let _running = false;
+let _paused = false;
+let _controller: AbortController | null = null;
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
+/**
+ * หยุดการทำงานอัตโนมัติทั้งหมด
+ */
 export function stopAutoProcess() {
   _running = false;
-}
-
-async function execCommand(
-  action: 'MOVE' | 'PICK' | 'PLACE',
-  target: { x: number; y: number; z: number }
-) {
-  switch (action) {
-    case 'MOVE': return cobotApi.move(target);
-    case 'PICK': return cobotApi.pick(target);
-    case 'PLACE': return cobotApi.place(target);
-    default: throw new Error(`Unknown command ${action}`);
+  _paused = false;
+  if (_controller) {
+    _controller.abort();
+    _controller = null;
   }
 }
 
 /**
- * Auto Process: continuous flow without manual continue.
- * 1. Move & pick to scan position
- * 2. Capture image and display
- * 3. Scan QR code, get code
- * 4. Predict from captured image, display
- * 5. Execute follow-up Cobot commands
+ * หยุดชั่วคราว แบบ pause/resume
+ */
+export function pauseAutoProcess() {
+  if (_running) _paused = true;
+}
+
+/**
+ * กลับมาทำงานต่อหลัง pause
+ */
+export function resumeAutoProcess() {
+  if (_running) _paused = false;
+}
+
+/**
+ * รอจน resume (ถ้า paused)
+ */
+async function waitIfPaused() {
+  while (_paused && _running) {
+    await delay(50);
+  }
+}
+
+// mapping สำหรับ speed & accj แต่ละจุด (และ delay หลังเรียก)
+const pointConfig: Record<string, { speedj: number; accj: number; postDelay: number }> = {
+  P1: { speedj: 20, accj: 20, postDelay: 2000 },
+  P2: { speedj: 20, accj: 20, postDelay: 2000 },
+  P3: { speedj: 10, accj: 10, postDelay: 2000 }, // slower for pick
+  P4: { speedj: 10, accj: 10, postDelay: 2000},
+  P5: { speedj: 10, accj: 10, postDelay: 2000 },
+  P7: { speedj: 20, accj: 20, postDelay: 2000 },
+  P8: { speedj: 20, accj: 20, postDelay: 2000 },
+  P9: { speedj: 20, accj: 20, postDelay: 2000 },
+  P10: { speedj: 20, accj: 20, postDelay: 2000 },
+  P11: { speedj: 20, accj: 20, postDelay: 2000 },
+};
+
+/**
+ * เรียก cobotApi.move ด้วย point, speedj, accj ตาม config
+ */
+async function movePoint(point: string) {
+  console.log(`[Auto] ▶️ Request movePoint('${point}')`);
+  if (!_running) throw new Error('Process stopped');
+  await waitIfPaused();
+  const cfg = pointConfig[point] || { speedj: 10, accj: 10, postDelay: 1000 };
+
+  const t0 = performance.now();
+  const res = await cobotApi.move({ point, speedj: cfg.speedj, accj: cfg.accj });
+  const ms = (performance.now() - t0).toFixed(0);
+  console.log(`[Auto] ⬅️ Response movePoint('${point}') in ${ms}ms →`, res);
+
+  console.log(`[Auto] ⏱️ postDelay ${cfg.postDelay}ms for '${point}'`);
+  await delay(cfg.postDelay);
+  console.log(`[Auto] ✅ postDelay done for '${point}'`);
+
+  return res;
+}
+
+/**
+ * เรียก grip close/open
+ */
+async function grip(action: 'close' | 'open') {
+  if (!_running) throw new Error('Process stopped');
+  await waitIfPaused();
+  return cobotApi.grip({ action });
+}
+
+/**
+ * รันชุดคำสั่ง auto process
+ * @param cycles จำนวนรอบที่จะวน (default 10)
+ * @param pickPoints ชื่อจุดสำหรับขั้นตอน pick แยกตามรอบ
  */
 export async function startAutoProcess(
   onQrScanned: (code: string) => void,
   onImageCaptured: (url: string) => void,
   onPredicted: (result: any) => void,
+  cycles = 2,
+  pickPoints: string[] = []
 ) {
   _running = true;
-  let firstRun = true;
+  _paused = false;
 
-  while (_running) {
+  for (let i = 0; i < cycles && _running; i++) {
     try {
-      // Wait IDLE except first run
-      if (!firstRun) {
-        let status: CobotStatus;
-        do {
-          try { status = await cobotApi.getStatus(); }
-          catch (e: any) { console.warn('Status error', e); await delay(2000); continue; }
-          if (status.status !== 'IDLE') await delay(2000);
-        } while (_running && status.status !== 'IDLE');
-        if (!_running) break;
-      } else firstRun = false;
+      // 1) P1 → P2 → dynamic P3
+      await movePoint('P1');
+      await movePoint('P2');
+      const pickPoint = pickPoints[i] ?? 'P3';
+      await movePoint(pickPoint);
 
-      // 1. Move & Pick to scan location
-      await execCommand('MOVE',  { x:100, y:200, z:150 });
-      await execCommand('PICK',  { x:50,  y:150, z:150 });
-      await execCommand('MOVE',  { x:50,  y:200, z:150 });
-      await execCommand('MOVE',  { x:150, y:200, z:150 });
+      // 2) จับชิ้นงาน
+      await grip('close');
 
-      // 2. Capture image via camera API
-      let captureRes;
-      try {
-        captureRes = await cameraApi.capture();
-      } catch (e: any) {
-        console.warn('Capture error, retrying', e);
-        await delay(2000);
-        continue;
-      }
-      const imgUrl = captureRes.imageUrl;
-      onImageCaptured(imgUrl);
-      // small delay to ensure UI render
-      await delay(2000);
+      // 3) P4 → P5 → P6 
+      await movePoint('P4');
+      await movePoint('P5');
+      await movePoint('P6');
 
-      // 3. Scan QR code via API
+      // 4) สแกน QR code (หลัง P6 จบแล้ว)
+      if (!_running) break;
+      await waitIfPaused();
+      _controller = new AbortController();
       let scanRes: ScanQrResponse;
       try {
-        scanRes = await cameraApi.scanQr();
-      } catch (e: any) {
-        console.warn('QR scan error, retrying', e);
-        await delay(2000);
+        scanRes = await Promise.race([
+          cameraApi.scanQr({ trigger: true }),
+          new Promise<never>((_, reject) => _controller!.signal.addEventListener('abort', () => reject(new Error('Scan aborted'))))
+        ]);
+      } catch (e) {
+        console.warn('QR scan aborted or error, retrying...', e);
+        _controller = null;
+        i--; await delay(1000);
         continue;
       }
+      _controller = null;
       const code = scanRes.codes[0]?.data ?? '';
       onQrScanned(code);
-      await delay(1000);
 
-      // 4. Predict using captured image
+      // 5) ถ่ายภาพ (หลังสแกนเสร็จแล้ว)
+      if (!_running) break;
+      await waitIfPaused();
+      _controller = new AbortController();
+      let capRes;
       try {
-        const response = await fetch(imgUrl);
-        const blob = await response.blob();
-        const file = new File([blob], `${code||'image'}.jpg`, { type: blob.type });
+        capRes = await Promise.race([
+          cameraApi.capture({ trigger: true }),
+          new Promise<never>((_, reject) => _controller!.signal.addEventListener('abort', () => reject(new Error('Capture aborted'))))
+        ]);
+      } catch (e) {
+        console.warn('Capture aborted or error, retrying...', e);
+        _controller = null;
+        i--; await delay(1000);
+        continue;
+      }
+      _controller = null;
+      onImageCaptured(capRes.imageUrl);
+
+      // 6) Predict (หลัง capture)
+      if (!_running) break;
+      await waitIfPaused();
+      try {
+        const resp = await fetch(capRes.imageUrl);
+        const blob = await resp.blob();
+        const file = new File([blob], `${code || 'image'}.jpg`, { type: blob.type });
         const result = await predictorApi.predict(file, code);
         onPredicted(result);
       } catch (e) {
         console.error('Predict error', e);
       }
-      await delay(2000);
 
-      // 5. Follow-up Cobot moves
-      await execCommand('PLACE', { x:300, y:20,  z:150 });
-      await execCommand('MOVE',  { x:100, y:200, z:150 });
-      await execCommand('PICK',  { x:50,  y:150, z:150 });
-      await execCommand('MOVE',  { x:50,  y:200, z:150 });
-      await execCommand('PLACE', { x:300, y:20,  z:150 });
-      await execCommand('MOVE',  { x:100, y:200, z:150 });
+      // 7) P7 → P8 → P9
+      await movePoint('P7');
+      await movePoint('P8');
+      await movePoint('P9');
 
+      // 8) ปล่อยชิ้นงาน
+      await grip('open');
+
+      // 9) P10 …
+      await movePoint('P10');
     } catch (err) {
-      console.error('AutoProcess fatal error', err);
-      _running = false;
+      console.error('AutoProcess fatal error:', err);
+      break;
     }
-    // Delay before next cycle
-    await delay(2000);
+  }
+
+  // cleanup
+  _running = false;
+  _paused = false;
+  if (_controller) {
+    _controller.abort();
+    _controller = null;
   }
 }

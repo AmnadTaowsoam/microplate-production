@@ -8,13 +8,14 @@ from pypylon import pylon
 from app.config          import Config
 from app.api.v1.endpoints import router as api_router
 
+# configure root logger for camera-service
 logging.basicConfig(
     level=Config.LOG_LEVEL.upper(),
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
-logger = logging.getLogger("cobot-service")
+logger = logging.getLogger("camera-service")
 
-app = FastAPI(title="Cobot Service")
+app = FastAPI(title="Camera Service")
 
 # CORS
 app.add_middleware(
@@ -26,7 +27,7 @@ app.add_middleware(
 )
 
 # mount API routes (all endpoints now require a valid JWT)
-app.include_router(api_router)
+app.include_router(api_router, prefix="/api/v1/camera")
 
 
 @app.get("/health", tags=["Health"])
@@ -66,7 +67,7 @@ if __name__ == "__main__":
     host = getattr(Config, "HOST", "0.0.0.0")
     port = Config.PORT
 
-    logger.info(f"Starting Cobot Service on {host}:{port}")
+    logger.info(f"Starting Camera Service on {host}:{port}")
     uvicorn.run(
         "app.main:app",
         host=host,

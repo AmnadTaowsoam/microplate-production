@@ -1,12 +1,11 @@
 // src/utils/fetcher.ts
-import { authApi } from './api/auth';
 
 export async function fetcher<T>(url: string, options: RequestInit = {}): Promise<T> {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!baseUrl) throw new Error('❌ NEXT_PUBLIC_API_BASE_URL is not defined');
   const fullUrl = `${baseUrl}${url}`;
 
-  // helper ที่ทำ request จริง ๆ
+  // ฟังก์ชันสำหรับส่ง request พร้อม access token ปัจจุบัน
   const makeRequest = async (): Promise<Response> => {
     const token = localStorage.getItem('accessToken');
     const headers: Record<string, string> = {
@@ -15,11 +14,16 @@ export async function fetcher<T>(url: string, options: RequestInit = {}): Promis
     if (!(options.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
     }
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    return fetch(fullUrl, { ...options, headers });
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return fetch(fullUrl, {
+      ...options,
+      headers,
+    });
   };
 
-  // exponential backoff retry สำหรับ 429
+  // ขั้นตอน retry แบบ exponential backoff สำหรับ 429
   let response: Response;
   const maxRetries = 3;
   let attempt = 0;
@@ -28,12 +32,10 @@ export async function fetcher<T>(url: string, options: RequestInit = {}): Promis
     if (response.status !== 429) break;
 
     if (attempt >= maxRetries) {
-      // เกินจำนวน retry ที่กำหนด ให้ throw error
       const retryText = await response.text();
       throw new Error(`API error 429: ${retryText}`);
     }
 
-    // ถ้ามี Retry-After header ให้ใช้ค่านั้น มิเช่นนั้นใช้ exponential backoff
     const ra = response.headers.get('Retry-After');
     const delayMs = ra
       ? parseInt(ra, 10) * 1000
@@ -43,23 +45,37 @@ export async function fetcher<T>(url: string, options: RequestInit = {}): Promis
     attempt++;
   }
 
-  // ถ้าเป็น 401 ให้ลอง refresh token
+  // ถ้าเจอ 401 ให้ลองเรียก refresh token ด้วย raw fetch
   if (response.status === 401) {
     const refreshToken = localStorage.getItem('refreshToken');
     if (refreshToken) {
-      try {
-        const { accessToken } = await authApi.refresh({ refreshToken });
-        localStorage.setItem('accessToken', accessToken);
-      } catch {
+      // เรียก /auth/refresh โดยตรง ไม่ผ่าน fetcher
+      const refreshRes = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (refreshRes.ok) {
+        const data = await refreshRes.json() as { accessToken: string };
+        localStorage.setItem('accessToken', data.accessToken);
+        // รีเทริน request เดิมอีกครั้ง
+        response = await makeRequest();
+      } else {
+        // ถ้า refresh ไม่สำเร็จ ให้เคลียร์ token แล้ว redirect ไปหน้า login
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
-        throw new Error('Session expired, please login again.');
+        window.location.href = '/auth/login';
+        throw new Error('Session expired, please log in again.');
       }
-      response = await makeRequest();
+    } else {
+      // ไม่มี refresh token ให้ redirect ไปหน้า login
+      window.location.href = '/auth/login';
+      throw new Error('Not authenticated. Please log in.');
     }
   }
 
+  // ถ้ายังไม่ ok ให้ throw error ออกไป
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`API error ${response.status}: ${errorText}`);

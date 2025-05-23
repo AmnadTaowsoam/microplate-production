@@ -25,8 +25,8 @@ services.forEach(({ path, target }) => {
       target,
       changeOrigin: true,
       secure: false,
-      timeout: 30000,
-      proxyTimeout: 30000
+      timeout: 120000,
+      proxyTimeout: 120000
     })
   );
 });

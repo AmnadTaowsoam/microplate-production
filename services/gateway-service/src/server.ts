@@ -56,7 +56,7 @@ function makeRawProxy(target: string) {
     target,
     changeOrigin: true,
     logLevel: 'debug',
-    proxyTimeout: 30000,
+    proxyTimeout: 120000,
   });
 }
 const cobotProxy   = makeRawProxy(config.COBOT_SERVICE_URL);

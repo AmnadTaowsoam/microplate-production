@@ -84,16 +84,9 @@ class DobotMG400:
 
     # ── Queued IO commands ─────────────────────────────────────────────
     def do(self, index: int, status: int) -> str:
-        """
-        ส่งคำสั่ง DO(index,status) ผ่านพอร์ต motion
-        (เทียบกับ v5 → ส่งตรง, เติม ';' แล้วจบ ไม่ต้องรอ idle)
-        """
         cmd = f"DO({index},{status});"
-        # ส่งผ่าน motion socket
-        with self._lock:
-            self.motion.sendall(cmd.encode('ascii'))
-        # คืนคำสั่งให้ caller แสดงผล
-        return cmd
+        with self._lock:          # ป้องกัน race condition ใน dash socket
+            return self._send(self.dash, cmd)
 
     def ensure_open(self) -> str:
         """DO(1,0) เปิดกริปเปอร์"""
@@ -139,4 +132,3 @@ class DobotMG400:
             logger.info("Dobot connections closed")
         else:
             logger.info("[SIM] Closed simulated connections")
-

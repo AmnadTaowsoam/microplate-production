@@ -75,11 +75,20 @@ async def move_point(req: MoveRequest, robot_data=Depends(get_robot)):
     robot, pts = robot_data
     if req.point not in pts:
         raise HTTPException(404, "Point not found")
-    x,y,z,r = pts[req.point]
-    # แค่ยิง MovJ ตรงๆ (ไม่ reset/enable ซ้ำ)
+    x, y, z, r = pts[req.point]
+    logger.info(f"[API] ▶️ move_point('{req.point}') coords=({x},{y},{z},{r}) …")
     cmd = await run_in_threadpool(robot.movj, x, y, z, r,
                                   speedj=req.speedj, accj=req.accj)
+    logger.info(f"[API] ⬅️ movj sent → {cmd}")
+    # จับ TimeoutError ไม่ให้หลุดไปเป็น 500
+    try:
+        await run_in_threadpool(robot.wait_until_idle)
+    except TimeoutError as e:
+        logger.warning(f"[API] robot.wait_until_idle timed out: {e}")
+        # ถ้าจะถือว่ายัง OK ให้ไปอ่าน mode ปัจจุบันต่อ
     mode = await run_in_threadpool(robot.robot_mode)
+    logger.info(f"[API] ✅ robot_mode after movj: {mode}")
+
     return RobotStatus(mode=mode, last_response=cmd)
 
 @router.post("/grip", response_model=RobotStatus)

@@ -12,13 +12,13 @@ from app.services.capture_service    import capture_image_stream
 from app.config                       import Config
 
 router = APIRouter(
-    prefix="/api/v1",
     tags=["Camera"],
     dependencies=[Depends(lambda creds=Depends(HTTPBearer()): _verify_token(creds))]
 )
 
 class TriggerRequest(BaseModel):
     trigger: bool
+
 
 def _verify_token(creds: HTTPAuthorizationCredentials):
     token = creds.credentials
@@ -75,6 +75,5 @@ async def camera_capture_stream(request: Request, payload: TriggerRequest):
     cam  = request.app.state.camera
     conv = request.app.state.converter
 
-    # capture_image_stream must return an iterator of raw JPEG bytes
-    stream = capture_image_stream(cam, conv)
-    return StreamingResponse(stream, media_type="image/jpeg")
+    # directly return the StreamingResponse from capture service
+    return capture_image_stream(cam, conv)

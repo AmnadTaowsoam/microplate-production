@@ -101,7 +101,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         })}
       </List>
       <Box sx={{ textAlign: 'center', p: 2, mt: 'auto', fontSize: '0.75rem', color: 'text.disabled' }}>
-        &copy; {new Date().getFullYear()} NanoNiche AI
+        &copy; {new Date().getFullYear()} Microplate AI System
       </Box>
     </Box>
   );

@@ -16,6 +16,7 @@ import {
   Stack,
   IconButton,
   CardMedia,
+  TextField,
 } from '@mui/material';
 import ScienceIcon from '@mui/icons-material/Science';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
@@ -28,6 +29,7 @@ import CameraStatusCard from './camera-status/CameraStatusCard';
 import QrResultDisplay from './qr-display/QrResultDisplay';
 import PredictResultsPanel from './predict-results/PredictResultsPanel';
 import { startAutoProcess, stopAutoProcess } from '@/utils/autoProcess';
+import AutoProcessControl from './auto-process/AutoProcess';
 
 import { cameraApi } from '../../utils/api/camera';
 import { predictorApi } from '../../utils/api/predictor';
@@ -62,22 +64,13 @@ export default function LabStationPage() {
 
   // state for auto process
   const [autoRunning, setAutoRunning] = useState(false);
+  const [cycles, setCycles] = useState<number>(10);
 
   // หยุด auto process ตอน unmount เท่านั้น
-  useEffect(() => {
-    return () => {
-      stopAutoProcess();
-    };
-  }, []);
+  useEffect(() => {return () => {stopAutoProcess();};}, []);
 
   // ล้าง blob URL เก่าเมื่อ capturedPreview เปลี่ยนหรือ unmount
-  useEffect(() => {
-    return () => {
-      if (capturedPreview) {
-        URL.revokeObjectURL(capturedPreview);
-      }
-    };
-  }, [capturedPreview]);
+  useEffect(() => {return () => {if (capturedPreview) {URL.revokeObjectURL(capturedPreview);}};}, [capturedPreview]);
 
   // Auto process handler
   const handleAutoClick = () => {
@@ -185,25 +178,21 @@ export default function LabStationPage() {
 
         {/* Layout */}
         <Grid container spacing={3}>
-          {/* Sidebar cards (2 cols) */}
+          {/* Sidebar */}
           <Grid item xs={12} md={2}>
-            <Stack spacing={2}>
+            <Stack spacing={2} sx={{ p: 1 }}>
               <CobotStatusCard />
               <CameraStatusCard />
-              <QrResultDisplay
-                onScanComplete={setQrCode}
-                externalValue={qrCode}
-              />
-              <Button
-                variant="contained"
-                fullWidth
-                startIcon={<RocketLaunchIcon />}
-                onClick={handleAutoClick}
-                color={autoRunning ? 'error' : 'primary'}
-                disabled={loading}
-              >
-                {autoRunning ? 'Stop Auto Process' : 'Start Auto Process'}
-              </Button>
+              <QrResultDisplay onScanComplete={setQrCode} externalValue={qrCode} />
+              <AutoProcessControl
+                  cycles={cycles}
+                  setCycles={setCycles}
+                  autoRunning={autoRunning}
+                  loading={loading}
+                  qrCode={qrCode}
+                  setQrCode={setQrCode}
+                  onStartStop={handleAutoClick}
+                />
             </Stack>
           </Grid>
 
@@ -253,7 +242,7 @@ export default function LabStationPage() {
                     sx={{ bgcolor: theme.palette.grey[50] }}
                   />
                   <Divider />
-                  <CardContent sx={{ minHeight: 600 }}>
+                  <CardContent sx={{ minHeight: 670 }}>
                     {predictionResults ? (
                       <PredictResultsPanel results={predictionResults} isLoading={loading} />
                     ) : (
